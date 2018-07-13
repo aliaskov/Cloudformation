@@ -47,10 +47,7 @@ Parameters:
     MaxLength: '41'
     AllowedPattern: '[a-zA-Z0-9]*'
     ConstraintDescription: must contain only alphanumeric characters.
-  DBSecurityGroup:
-    Description: RDS - security group
-    Default: RDS_isolated
-    Type: "List<AWS::EC2::SecurityGroup::GroupName>"
+
 Resources:
   MyDB:
     Type: AWS::RDS::DBInstance
@@ -66,8 +63,6 @@ Resources:
       MasterUsername: !Ref 'DBUser'
       MasterUserPassword: !Ref 'DBPassword'
       DBParameterGroupName: !Ref 'MyRDSParamGroup'
-      VPCSecurityGroups:
-        - 'DBSecurityGroup'
   MyRDSParamGroup:
     Type: AWS::RDS::DBParameterGroup
     Properties:
