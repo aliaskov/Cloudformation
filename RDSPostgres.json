@@ -1,0 +1,146 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "PostgreSQL RDS Template ",
+
+  "Parameters" : {
+
+    "DBName": {
+      "Default": "Sonardb",
+      "Description" : "The database name",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "8",
+      "AllowedPattern" : "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters."
+    },
+
+    "DBUsername": {
+      "Default": "sonar",
+      "Description" : "The database admin account username. Default is sonar",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "AllowedPattern" : "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters."
+    },
+
+    "DBPassword": {
+      "Default": "sonarqube",
+      "NoEcho": "true",
+      "Description" : "The database admin account password. Default is sonarqube",
+      "Type": "String",
+      "MinLength": "8"
+    },
+
+    "DBClass" : {
+      "Default" : "db.t2.micro",
+      "Description" : "Database instance class",
+      "Type" : "String",
+      "AllowedValues" : [ "db.t2.micro", "db.t2.medium", "db.t2.small", "db.m4.large", "db.r4.large", "db.r4.xlarge" ],
+      "ConstraintDescription" : "must select a valid database instance type."
+    },
+    "VPCSubnets": {
+      "Description": "Subnets for the RDS instances",
+      "Type": "List<AWS::EC2::Subnet::Id>"
+    },
+    "VpcId": {
+      "Description": "VPC ID for resources",
+      "Type": "AWS::EC2::VPC::Id"
+    },
+
+    "DBAllocatedStorage" : {
+      "Default": "5",
+      "Description" : "The size of the database (Gb)",
+      "Type": "Number",
+      "MinValue": "5",
+      "MaxValue": "6144",
+      "ConstraintDescription" : "must be between 5+"
+    }
+
+  },
+
+  "Mappings" : {
+    "VPC" : {
+      "single-vpc-pub-priv" : {
+        "Ref": "VpcId"
+      },
+    },
+    "Subnets" : {
+      "public-subnet" : {
+        "PublicSubnetAZC" : "subnet-c4e62d89",
+        "PublicSubnetAZA" : "subnet-13c31f78",
+        "PublicSubnetAZB" : "subnet-84c6d4fe"
+      }
+    }
+  },
+
+  "Resources" : {
+
+    "myDBEC2SecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Frontend Access",
+        "VpcId"            : {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupIngress" : [{
+          "IpProtocol" : "tcp",
+          "FromPort"   : 5432,
+          "ToPort"     : 5432,
+          "CidrIp"     : "10.102.0.0/16"
+        }]
+      }
+    },
+
+    "myDBParamGroup": {
+        "Type": "AWS::RDS::DBParameterGroup",
+        "Properties": {
+            "Description": "Database Parameter Group + pg_stat_statements",
+            "Family": "postgres9.6",
+             "Parameters": {
+                "shared_preload_libraries": "pg_stat_statements"
+            }
+        }
+    },
+
+    "myDBSubnetGroup" : {
+      "Type" : "AWS::RDS::DBSubnetGroup",
+      "Properties" : {
+         "DBSubnetGroupDescription" : "DB Public Subnet",
+         "SubnetIds" : {
+           "Ref": "VPCSubnets"
+         }
+      }
+    },
+
+    "pgDB" : {
+      "Type" : "AWS::RDS::DBInstance",
+      "Properties" : {
+        "DBName" : { "Ref" : "DBName" },
+        "DBInstanceIdentifier" : { "Ref" : "DBName" },
+        "AllocatedStorage" : { "Ref" : "DBAllocatedStorage" },
+        "StorageType" : "gp2",
+        "DBInstanceClass" : { "Ref" : "DBClass" },
+        "Engine" : "postgres",
+        "MasterUsername" : { "Ref" : "DBUsername" } ,
+        "MasterUserPassword" : { "Ref" : "DBPassword" },
+        "DBSubnetGroupName" : { "Ref" : "myDBSubnetGroup" },
+        "DBParameterGroupName" : {"Ref" : "myDBParamGroup" },
+        "VPCSecurityGroups" : [ { "Fn::GetAtt" : [ "myDBEC2SecurityGroup", "GroupId" ] } ]
+      }
+    }
+  },
+
+  "Outputs" : {
+    "JDBCConnectionString": {
+      "Description" : "JDBC connection string for database",
+      "Value" : { "Fn::Join": [ "", [ "jdbc:postgresql://",
+                                      { "Fn::GetAtt": [ "pgDB", "Endpoint.Address" ] },
+                                      ":",
+                                      { "Fn::GetAtt": [ "pgDB", "Endpoint.Port" ] },
+                                      "/",
+                                      { "Ref": "DBName" }]]}
+    }
+  }
+}
