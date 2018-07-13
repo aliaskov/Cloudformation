@@ -61,6 +61,13 @@
       "MinValue": "5",
       "MaxValue": "1024",
       "ConstraintDescription" : "must be between 5 and 1024Gb."
+    },
+
+    "DBStorageType" : {
+      "Default": "gp2",
+      "Description" : "Data Volume type",
+      "Type": "String",
+      "AllowedValues" : [ "gp2", "standard", "io1" ],
     }
   },
 
@@ -80,7 +87,33 @@
         "Properties" :
         {
            "GroupDescription" : "Security group for RDS DB Instance.",
-           "VpcId" : { "Ref" : "VpcId" }
+           "VpcId" : { "Ref" : "VpcId" },
+           "SecurityGroupIngress": [{
+               "IpProtocol": "tcp",
+               "FromPort": 3306,
+               "ToPort": 3306,
+               "CidrIp": "10.0.0.0/8"
+           }, {
+               "IpProtocol": "tcp",
+               "FromPort": 22,
+               "ToPort": 22,
+               "CidrIp": "10.0.0.0/8"
+           }],
+           "Tags": [{
+               "Key": "name",
+               "Value": {
+                   "Fn::Join": [
+                       "-", [{
+                               "Ref": "AWS::StackName"
+                           },
+                           "security_group"
+                       ]
+                   ]
+               }
+           }, {
+               "Key": "maintainer",
+               "Value": "devops"
+           }]
         }
     },
 
@@ -90,7 +123,7 @@
         "DBName" : { "Ref" : "DBName" },
         "DBInstanceIdentifier": {"Ref" : "DBName"},
         "AllocatedStorage" : { "Ref" : "DBAllocatedStorage" },
-        "StorageType" : "gp2",
+        "StorageType" : { "Ref" : "DBStorageType" },
         "DBInstanceClass" : { "Ref" : "DBClass" },
         "Engine" : "MySQL",
         "EngineVersion" : "5.6.39",
