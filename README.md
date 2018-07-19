@@ -9,3 +9,4 @@
    created by autocommit3
    created by autocommit4
    created by autocommit5
+   created by autocommit6
