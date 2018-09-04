@@ -107,7 +107,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Access to the public facing load balancer
-      VpcId: !Ref 'VPC'
+      VpcId: vpc-0ff89d9a98bfbeb37
       SecurityGroupIngress:
           - CidrIp: 0.0.0.0/0
             IpProtocol: -1
@@ -122,7 +122,10 @@ Resources:
       Subnets:
         - !Ref PublicSubnetOne
         - !Ref PublicSubnetTwo
-#      SecurityGroups: [!Ref 'PublicLoadBalancerSG']
+      SecurityGroups:
+        - !Ref 'FargateContainerSecurityGroup'
+        - !Ref 'PublicLoadBalancerSG'
+
 
   FargateTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
