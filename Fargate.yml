@@ -12,7 +12,13 @@ Parameters:
       - latest
       - prod
       - uat
-  HealthcheckPath:
+  ContainerPort:
+    Type: Number
+    Default: 8080
+    MinValue : 20
+    MaxValue : 65535
+    Description: Application port, inside container
+  HealthcheckPort:
     Type: Number
     Default: 80
     MinValue : 80
@@ -39,7 +45,15 @@ Parameters:
   # DbConnector:
   #   Type: String
   #   Default: mysql
-
+  VPC:
+    Description: VPC ID for resources
+    Type: AWS::EC2::VPC::Id
+  PublicSubnetOne:
+    Description: Select public subnet within VPC
+    Type: AWS::EC2::Subnet::Id
+  PublicSubnetTwo:
+    Description: Select public subnet within VPC
+    Type: AWS::EC2::Subnet::Id
   # Important: Follow the CPU + memory combination rules laid out here:
   # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-taskdefinition.html
   Cpu:
@@ -51,108 +65,18 @@ Parameters:
     Description: The memory reservation for the container. Must adhere to https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-taskdefinition.html.
     Type: String
     Default: 2GB
-
-  JvmOpts:
-    Description: The JVM options passed to Fargate . For example, change this value when changing the memory parameter. Max heap memory (Xmx) should be roughly two thirds of the total memory.
-    Type: String
-    Default: '-Xmx1350m'
+  #
+  # JvmOpts:
+  #   Description: The JVM options passed to Fargate . For example, change this value when changing the memory parameter. Max heap memory (Xmx) should be roughly two thirds of the total memory.
+  #   Type: String
+  #   Default: '-Xmx1350m'
 
   # ManagementApiSecret:
   #   Description: The secret for your App.
   #   Type: String
 
-Mappings:
-  # Hard values for the subnet masks. These masks define
-  # the range of internal IP addresses that can be assigned.
-  # The VPC can have all IP's from 10.0.0.0 to 10.0.255.255
-  # There are two subnets which cover the ranges:
-  #
-  # 10.0.0.0 - 10.0.0.255
-  # 10.0.1.0 - 10.0.1.255
-  #
-  # If you need more IP addresses (perhaps you have so many
-  # instances that you run out) then you can customize these
-  # ranges to add more
-  SubnetConfig:
-    VPC:
-      CIDR: '10.0.0.0/16'
-    PublicOne:
-      CIDR: '10.0.0.0/20'
-    PublicTwo:
-      CIDR: '10.0.32.0/20'
 
 Resources:
-  # VPC in which containers will be networked.
-  # It has two public subnets
-  # We distribute the subnets across the first two available subnets
-  # for the region, for high availability.
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      CidrBlock: !FindInMap ['SubnetConfig', 'VPC', 'CIDR']
-
-  # Two public subnets, where containers can have public IP addresses
-  PublicSubnetOne:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone:
-         Fn::Select:
-         - 0
-         - Fn::GetAZs: {Ref: 'AWS::Region'}
-      VpcId: !Ref 'VPC'
-      CidrBlock: !FindInMap ['SubnetConfig', 'PublicOne', 'CIDR']
-      MapPublicIpOnLaunch: true
-
-  PublicSubnetTwo:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone:
-         Fn::Select:
-         - 1
-         - Fn::GetAZs: {Ref: 'AWS::Region'}
-      VpcId: !Ref 'VPC'
-      CidrBlock: !FindInMap ['SubnetConfig', 'PublicTwo', 'CIDR']
-      MapPublicIpOnLaunch: true
-
-  # Setup networking resources for the public subnets. Containers
-  # in the public subnets have public IP addresses and the routing table
-  # sends network traffic via the internet gateway.
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-
-  GatewayAttachement:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref 'VPC'
-      InternetGatewayId: !Ref 'InternetGateway'
-
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref 'VPC'
-
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: GatewayAttachement
-    Properties:
-      RouteTableId: !Ref 'PublicRouteTable'
-      DestinationCidrBlock: '0.0.0.0/0'
-      GatewayId: !Ref 'InternetGateway'
-
-  PublicSubnetOneRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnetOne
-      RouteTableId: !Ref PublicRouteTable
-
-  PublicSubnetTwoRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnetTwo
-      RouteTableId: !Ref PublicRouteTable
-
   # ECS Resources
   ECSCluster:
     Type: AWS::ECS::Cluster
@@ -198,7 +122,7 @@ Resources:
       Subnets:
         - !Ref PublicSubnetOne
         - !Ref PublicSubnetTwo
-      SecurityGroups: [!Ref 'PublicLoadBalancerSG']
+#      SecurityGroups: [!Ref 'PublicLoadBalancerSG']
 
   FargateTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -249,8 +173,8 @@ Resources:
           Essential: true
           Image: !Join [ ':', [!Ref DockerImage, !Ref ImageTag ] ]
           PortMappings:
-            - ContainerPort: 60000
-          Environment:
+            - ContainerPort: !Ref ContainerPort
+          # Environment:
             # - Name: APP_CONFIG
             #   Value: !Sub
             #     - |
@@ -265,13 +189,13 @@ Resources:
             #           password: ${DbPassword}
             #           migrations: true
             #     - {}
-            - Name: JAVA_OPTS
-              Value: !Ref JvmOpts
-
-          Ulimits:
-            - Name: nofile
-              HardLimit: 1000000
-              SoftLimit: 1000000
+            # - Name: JAVA_OPTS
+            #   Value: !Ref JvmOpts
+          #
+          # Ulimits:
+          #   - Name: nofile
+          #     HardLimit: 1000000
+          #     SoftLimit: 1000000
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -293,7 +217,7 @@ Resources:
       TaskDefinition: !Ref TaskDefinition
       LoadBalancers:
         - ContainerName: !Join ['-', [!Ref 'AWS::StackName', 'fargate']]
-          ContainerPort: 60000
+          ContainerPort: !Ref ContainerPort
           TargetGroupArn: !Ref FargateTargetGroup
       NetworkConfiguration:
         AwsvpcConfiguration:
