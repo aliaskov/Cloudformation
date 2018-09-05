@@ -1,17 +1,19 @@
 # Template adapted from https://github.com/nathanpeck/aws-cloudformation-fargate
 AWSTemplateFormatVersion: '2010-09-09'
-Description: AWS Fargate stack.
+Description: CloudFormation template that creates AWS Fargate stack- Cluster, Service, TaskDefinition and delpoys Docker container. ALB with Route53 DNS name included
 Parameters:
   DockerImage:
     Type: String
     Default: nginx
+    Description: Docker image name
   ImageTag:
     Type: String
     Default: latest
-    AllowedValues:
-      - latest
-      - prod
-      - uat
+    Description: Docker image tag
+    # AllowedValues:
+    #   - latest
+    #   - prod
+    #   - uat
   ContainerPort:
     Type: Number
     Default: 8080
@@ -28,23 +30,15 @@ Parameters:
     Type: String
     Default: "/"
     Description: A Healthcheck container path. Should be accessible from load balancer, to be part of the TG
-  # DbHost:
-  #   Type: String
-  #
-  # DbPort:
-  #   Type: Number
-  #   Default: 3306
-  #
-  # DbUser:
-  #   Type: String
-  #
-  # DbPassword:
-  #   Type: String
-  #   NoEcho: true
-  #
-  # DbConnector:
-  #   Type: String
-  #   Default: mysql
+  DomainName:
+    Type: String
+    Description: A fully-qualified domain name.
+    MinLength: 1
+    MaxLength: 64
+    AllowedPattern: (?!-)[a-zA-Z0-9-.]*(?<!-)
+    ConstraintDescription: must be a valid fully-qualified domain name. StackName would be added automatically
+    Default: aws.funkedigital.de.
+
   VPC:
     Description: VPC ID for resources
     Type: AWS::EC2::VPC::Id
@@ -54,6 +48,23 @@ Parameters:
   PublicSubnetTwo:
     Description: Select public subnet within VPC
     Type: AWS::EC2::Subnet::Id
+    # DbHost:
+    #   Type: String
+    #
+    # DbPort:
+    #   Type: Number
+    #   Default: 3306
+    #
+    # DbUser:
+    #   Type: String
+    #
+    # DbPassword:
+    #   Type: String
+    #   NoEcho: true
+    #
+    # DbConnector:
+    #   Type: String
+    #   Default: mysql
   # Important: Follow the CPU + memory combination rules laid out here:
   # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-taskdefinition.html
   Cpu:
@@ -107,7 +118,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Access to the public facing load balancer
-      VpcId: vpc-0ff89d9a98bfbeb37
+      VpcId: !Ref 'VPC'
       SecurityGroupIngress:
           - CidrIp: 0.0.0.0/0
             IpProtocol: -1
@@ -230,6 +241,27 @@ Resources:
           Subnets:
             - !Ref PublicSubnetOne
             - !Ref PublicSubnetTwo
+  ALBDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Comment: DNS name for FG task.
+      HostedZoneName: !Ref 'DomainName'
+      Name: !Join ['', [!Ref 'AWS::StackName', ., !Ref 'DomainName']]
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt PublicLoadBalancer.DNSName
+        HostedZoneId: !GetAtt PublicLoadBalancer.CanonicalHostedZoneID
+# myDNS:
+#   Type: AWS::Route53::RecordSetGroup
+#   Properties:
+#     HostedZoneName: example.com.
+#     Comment: Zone apex alias targeted to myELB LoadBalancer.
+#     RecordSets:
+#     - Name: example.com.
+#       Type: A
+#       AliasTarget:
+#         HostedZoneId: !GetAtt myELB.CanonicalHostedZoneNameID
+#         DNSName: !GetAtt myELB.DNSName
 
   # This is an IAM role which authorizes ECS to manage resources on your
   # account on your behalf, such as updating your load balancer with the
@@ -308,12 +340,16 @@ Outputs:
     Export:
       Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ClusterName' ] ]
 
-  ExternalUrl:
+  ExternalALBUrl:
     Description: The url of the external load balancer
     Value: !Join ['', ['http://', !GetAtt 'PublicLoadBalancer.DNSName']]
     Export:
-      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ExternalUrl' ] ]
-
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ExternalALBUrl' ] ]
+  ExternalDNSName:
+    Description: The url of the DNS record in Route53
+    Value: !Join ['', ['http://', !Ref 'ALBDNSRecord' ] ]
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ExternalDNSName' ] ]
   ECSRole:
     Description: The ARN of the ECS role
     Value: !GetAtt 'ECSRole.Arn'
