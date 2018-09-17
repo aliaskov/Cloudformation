@@ -24,6 +24,7 @@ Metadata:
           default: "Fargate Container Configuration"
         Parameters:
           - ContainerPort
+          - ContainerHealthCheck
       -
         Label:
           default: "Amazon Application Load balancer and Domain Configuration"
@@ -164,6 +165,12 @@ Parameters:
     Description: The memory reservation for the container.
     Type: String
     Default: 2GB
+  ContainerHealthCheck:
+    Type: String
+    Description: Container self-Healthcheck
+    Default:  curl -f 127.0.0.1 || exit 1
+
+
   #
   # JvmOpts:
   #   Description: The JVM options passed to Fargate . For example, change this value when changing the memory parameter. Max heap memory (Xmx) should be roughly two thirds of the total memory.
@@ -267,7 +274,7 @@ Resources:
       Memory: !Ref Memory
       RequiresCompatibilities:
         - FARGATE
-      Family: !Join ['-', [!Ref 'AWS::StackName', 'fargate']]
+      Family: Fargate
       NetworkMode: awsvpc
       ExecutionRoleArn: !Ref ECSTaskExecutionRole # arn:aws:iam::000:role/EcsTaskExecutionRole
       TaskRoleArn: !Ref ECSTaskExecutionRole #arn:aws:iam::000:role/EcsTaskExecutionRole
@@ -277,6 +284,11 @@ Resources:
           Image: !Join [ ':', [!Ref DockerImage, !Ref ImageTag ] ]
           PortMappings:
             - ContainerPort: !Ref ContainerPort
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - !Ref ContainerHealthCheck
+            StartPeriod: 10
           Environment:
           - Name:
               Ref: Env1
@@ -427,6 +439,19 @@ Resources:
                 # Allow the ECS tasks to upload logs to CloudWatch
                 - 'logs:CreateLogStream'
                 - 'logs:PutLogEvents'
+
+                # Allow the ECS tasks to access RDS
+  # - rds:DescribeDBClusterSnapshots
+  # - rds:DescribeEngineDefaultClusterParameters
+  # - rds:DescribeDBInstances
+  # - rds:DescribeOrderableDBInstanceOptions
+  # - rds:DownloadCompleteDBLogFile
+  # - rds:DescribeEngineDefaultParameters
+  # - rds:DescribeCertificates
+  # - rds:DescribeEventCategories
+  # - rds:PurchaseReservedDBInstancesOffering
+  # - rds:DescribeAccountAttributes
+                - 'rds:*'
               Resource: '*'
 
 # These are the values output by the CloudFormation template. Be careful
