@@ -1,0 +1,306 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Dockerized cue CloudFormation template",
+    "Parameters": {
+        "KeyPair": {
+            "Type": "String",
+            "Description": "Key pair name.",
+            "Default": "build"
+        },
+        "VpcStackId": {
+            "Description": "Id of desired VPC",
+            "Type": "AWS::EC2::VPC::Id",
+            "Default": "vpc-XXXXXXXX"
+        },
+        "AvailabilityZone": {
+            "Description": "AvailabilityZone of Stack",
+            "Type": "String",
+            "Default": "eu-central-1c"
+        },
+
+        "SubnetId": {
+            "Description": "Id of desired subnet",
+            "Type": "AWS::EC2::Subnet::Id",
+            "Default": "subnet-XXXXXXXX"
+        },
+        "Domain": {
+            "Type": "String",
+            "Description": "Domain that serves as HostedZone for Route53.",
+            "Default": "aws.funkedigital.de"
+        },
+        "VolumeSize": {
+            "Type": "String",
+            "Description": "Cue Data Volume size",
+            "Default": "100"
+        },
+        "VolumeType": {
+            "Type": "String",
+            "Description": "cue Data Volume type",
+            "Default": "gp2"
+        },
+        "InstanceType": {
+            "Type": "String",
+            "Description": "Try to avoid new instance types, as they use HVM hypervisor",
+            "Default": "t2.medium"
+        }
+    },
+    "Mappings": {
+        "AmazonLinuxAmi": {
+            "us-east-1": {
+                "Ami": "ami-0a0c6574ce16ce87a"
+            },
+            "us-east-2": {
+                "Ami": "ami-58f5db3d"
+            },
+            "us-west-1": {
+                "Ami": "ami-62e0d802"
+            },
+            "us-west-2": {
+                "Ami": "ami-7114c909"
+            },
+            "eu-west-2": {
+                "Ami": "ami-dbfee1bf"
+            },
+            "eu-central-1": {
+                "Ami": "ami-0b9fee3a2d0596ed1"
+            },
+            "eu-west-1": {
+                "Ami": "ami-066826c6a40879d75"
+            }
+        }
+    },
+    "Resources": {
+        "RecordSet": {
+            "Type": "AWS::Route53::RecordSet",
+            "Properties": {
+                "HostedZoneName": {
+                    "Fn::Sub": "${Domain}."
+                },
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}.${Domain}."
+                },
+                "Type": "A",
+                "TTL": "60",
+                "ResourceRecords": [{
+                    "Fn::GetAtt": [
+                        "Instance",
+                        "PublicIp"
+                    ]
+                }]
+            }
+        },
+        "SecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "cue_sg",
+                "VpcId": {
+                    "Fn::Sub": "${VpcStackId}"
+                },
+                "SecurityGroupIngress": [{
+                    "IpProtocol": "tcp",
+                    "FromPort": 9090,
+                    "ToPort": 9090,
+                    "CidrIp": "10.0.0.0/8"
+                }, {
+                    "IpProtocol": "tcp",
+                    "FromPort": 22,
+                    "ToPort": 22,
+                    "CidrIp": "10.0.0.0/8"
+                }, {
+                    "IpProtocol": "tcp",
+                    "FromPort": 80,
+                    "ToPort": 80,
+                    "CidrIp": "10.0.0.0/8"
+                }, {
+                    "IpProtocol": "tcp",
+                    "FromPort": 9093,
+                    "ToPort": 9093,
+                    "CidrIp": "10.0.0.0/8"
+                }, {
+                    "IpProtocol": "tcp",
+                    "FromPort": 3000,
+                    "ToPort": 3000,
+                    "CidrIp": "10.0.0.0/8"
+                }, {
+                    "IpProtocol": "tcp",
+                    "FromPort": 443,
+                    "ToPort": 443,
+                    "CidrIp": "10.0.0.0/8"
+                }],
+                "Tags": [{
+                    "Key": "name",
+                    "Value": {
+                        "Fn::Join": [
+                            "-", [{
+                                    "Ref": "AWS::StackName"
+                                },
+                                "cue"
+                            ]
+                        ]
+                    }
+                }, {
+                    "Key": "maintainer",
+                    "Value": "devops"
+                }]
+            }
+        },
+        "DataVolume": {
+            "Type": "AWS::EC2::Volume",
+            "Properties": {
+                "Size": {
+                    "Ref": "VolumeSize"
+                },
+                "VolumeType": {
+                    "Ref": "VolumeType"
+                },
+                "AvailabilityZone": {
+                    "Fn::Sub": "${AvailabilityZone}"
+                },
+                "Tags": [{
+                    "Key": "Backup",
+                    "Value": "true"
+                }, {
+                    "Key": "maintainer",
+                    "Value": "devops"
+                }, {
+                    "Key": "Name",
+                    "Value": {
+                        "Fn::Sub": "${AWS::StackName}-data"
+                    }
+                }]
+            },
+            "DeletionPolicy": "Snapshot"
+        },
+        "Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "AmazonLinuxAmi", {
+                            "Ref": "AWS::Region"
+                        },
+                        "Ami"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "AvailabilityZone": {
+                    "Fn::Sub": "${AvailabilityZone}"
+                },
+                "IamInstanceProfile": {
+                    "Ref": "CueInstanceProfile"
+                },
+                "KeyName": {
+                    "Ref": "KeyPair"
+                },
+                "NetworkInterfaces": [{
+                    "DeviceIndex": "0",
+                    "SubnetId": {
+                        "Fn::Sub": "${SubnetId}"
+                    },
+                    "GroupSet": [{
+                        "Ref": "SecurityGroup"
+                    }]
+                }],
+                "Volumes": [{
+                    "VolumeId": {
+                        "Ref": "DataVolume"
+                    },
+                    "Device": "/dev/sdk"
+                }],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "", [
+                                "#!/bin/bash -xe\n",
+                                "exec > >(tee /var/log/user-data.log|logger -t user-data ) 2>&1\n",
+                                "if ! blkid /dev/xvdk; then mkfs -t ext4 /dev/xvdk; fi\n",
+                                "mount /dev/xvdk /opt\n",
+                                "echo \"/dev/xvdk /opt ext4 defaults,nofail 0 2\" >> /etc/fstab\n",
+                                "sudo yum update -y\n",
+                                "sudo yum install -y git\n",
+                                "curl -O https://bootstrap.pypa.io/get-pip.py\n",
+                                "python get-pip.py --user\n",
+                                "pip install awscli --upgrade --user\n",
+                                "sudo mkdir -p /opt/cue\n",
+                                "sudo chown ec2-user:ec2-user /opt/cue\n",
+                                "sudo curl -L https://github.com/docker/compose/releases/download/1.22.0/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\n",
+                                "sudo chmod +x /usr/local/bin/docker-compose"
+                            ]
+                        ]
+                    }
+                },
+                "Tags": [{
+                    "Key": "maintainer",
+                    "Value": "devops"
+                }, {
+                    "Key": "Name",
+                    "Value": {
+                        "Fn::Sub": "${AWS::StackName}"
+                    }
+                }]
+            }
+        },
+        "CueRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": [
+                                "ec2.amazonaws.com"
+                            ]
+                        },
+                        "Action": [
+                            "sts:AssumeRole"
+                        ]
+                    }]
+                },
+                "Path": "/"
+            }
+        },
+        "CueRolePolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "CueRolePolicy",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                            "Effect": "Allow",
+                            "Action": "ec2:Describe*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "ecr:GetAuthorizationToken",
+                                "ecr:BatchCheckLayerAvailability",
+                                "ecr:GetDownloadUrlForLayer",
+                                "ecr:GetRepositoryPolicy",
+                                "ecr:DescribeRepositories",
+                                "ecr:ListImages",
+                                "ecr:DescribeImages",
+                                "ecr:BatchGetImage"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Roles": [{
+                    "Ref": "CueRole"
+                }]
+            }
+        },
+        "CueInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [{
+                    "Ref": "CueRole"
+                }]
+            }
+        }
+    }
+}
