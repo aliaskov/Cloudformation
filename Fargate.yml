@@ -48,6 +48,10 @@ Metadata:
     ParameterLabels:
       VPC:
         default: "Which VPC should this be deployed to?"
+      Cpu:
+        default: "The CPU units for the container"
+      Memory:
+        default: "The MEMORY reservation for the container"
 Parameters:
   DockerImage:
     Type: String
@@ -99,11 +103,11 @@ Parameters:
   Env1:
     Description: Environment variable with name 'Env1' and value 'Val1' is injected into the task
     Type: String
-    Default: Env1
+    Default: SPRING_PROFILES_ACTIVE
   Val1:
     Description: Value of the environment variable 1 - Env1
     Type: String
-    Default: ''
+    Default: 'aws'
   Env2:
     Description: Environment variable with name 'Env2' and value 'Val2' is injected into the task
     Type: String
@@ -157,13 +161,13 @@ Parameters:
   # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-taskdefinition.html
   Cpu:
     Type: String
-    Description: The CPU units for the container. Must adhere to https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-taskdefinition.html.
-    Default: 1024
+    Description: Supported values are between **256 CPU units or 0.25 vCPUs** and **10240 CPU units or 10 vCPUs**. Must adhere to https://https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html
+    Default: 256
 
   Memory:
-    Description: The memory reservation for the container.
+    Description:  0.5GB, 1GB, 2GB - Available cpu values 256 = .25 vCPU. | 1GB, 2GB, 3GB, 4GB - Available cpu values 512 =.5 vCPU.  | 2GB, 3GB, 4GB, 5GB, 6GB, 7GB, 8GB - Available cpu values 1024 =1 vCPU.  | Between 4GB and 16GB in 1GB increments - Available cpu values 2048 = 2 vCPU.  | Between 8GB and 30GB in 1GB increments - Available cpu values 4096 = 4 vCPU
     Type: String
-    Default: 2GB
+    Default: 0.5GB
   #
   # JvmOpts:
   #   Description: The JVM options passed to Fargate . For example, change this value when changing the memory parameter. Max heap memory (Xmx) should be roughly two thirds of the total memory.
@@ -230,15 +234,15 @@ Resources:
   FargateTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      HealthCheckIntervalSeconds: 6
+      HealthCheckIntervalSeconds: 30
       HealthCheckPath: !Ref 'HealthcheckPath'
       HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 20
+      HealthyThresholdCount: 3
       Name: !Join ['-', [!Ref 'AWS::StackName', 'fargate']]
       Port: !Ref 'HealthcheckPort'
       Protocol: HTTP
-      UnhealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
       VpcId: !Ref 'VPC'
       TargetType: 'ip'
 
@@ -258,7 +262,7 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     Properties:
       LogGroupName: !Ref 'AWS::StackName'
-      RetentionInDays: 7
+      RetentionInDays: 3
 
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
