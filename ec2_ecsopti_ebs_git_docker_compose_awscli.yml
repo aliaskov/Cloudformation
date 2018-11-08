@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Dockerized cue CloudFormation template",
+    "Description": "Ec2 CloudFormation template with git, aws cli and docker-compose",
     "Parameters": {
         "KeyPair": {
             "Type": "String",
@@ -220,13 +220,17 @@
                                 "echo \"/dev/xvdk /opt ext4 defaults,nofail 0 2\" >> /etc/fstab\n",
                                 "sudo yum update -y\n",
                                 "sudo yum install -y git\n",
-                                "curl -O https://bootstrap.pypa.io/get-pip.py\n",
-                                "python get-pip.py --user\n",
-                                "pip install awscli --upgrade --user\n",
                                 "sudo mkdir -p /opt/cue\n",
                                 "sudo chown ec2-user:ec2-user /opt/cue\n",
                                 "sudo curl -L https://github.com/docker/compose/releases/download/1.22.0/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\n",
-                                "sudo chmod +x /usr/local/bin/docker-compose"
+                                "sudo chmod +x /usr/local/bin/docker-compose\n",
+                                "echo 'Downloading PIP and installing awscli'\n",
+                                "runuser -l ec2-user -c 'curl -O https://bootstrap.pypa.io/get-pip.py'\n",
+                                "echo 'Executing PIP using Python'\n",
+                                "runuser -l ec2-user -c 'python get-pip.py --user'\n",
+                                "runuser -l ec2-user -c 'pip install awscli --upgrade --user'\n",
+                                "runuser -l ec2-user -c 'export PATH=/home/ec2-user/.local/bin:$PATH'\n",
+                                "echo 'Installing AWS CLI - done'\n"
                             ]
                         ]
                     }
