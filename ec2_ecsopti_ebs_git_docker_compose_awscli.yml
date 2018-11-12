@@ -8,7 +8,7 @@
             "Label": {
               "default": "Network Configuration"
             },
-            "Parameters": ["VpcStackId", "SubnetId", "AvailabilityZone"]
+            "Parameters": ["VpcStackId", "SubnetId", "AvailabilityZone", "SSHLocation"]
           },
           {
             "Label": {
