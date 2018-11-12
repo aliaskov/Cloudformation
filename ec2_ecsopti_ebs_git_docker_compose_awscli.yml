@@ -1,27 +1,50 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Ec2 CloudFormation template with git, aws cli and docker-compose",
+    "Description": "CloudFormation template of Ec2 ecs optimized Amazon Linux  with git, aws cli and docker-compose",
+    "Metadata": {
+      "AWS::CloudFormation::Interface": {
+        "ParameterGroups": [
+          {
+            "Label": {
+              "default": "Network Configuration"
+            },
+            "Parameters": ["VpcStackId", "SubnetId", "AvailabilityZone"]
+          },
+          {
+            "Label": {
+              "default": "Amazon EC2 Configuration"
+            },
+            "Parameters": ["InstanceType", "KeyPair", "Domain", "VolumeSize", "VolumeType"]
+          }
+        ],
+        "ParameterLabels": {
+          "VpcStackId": {
+            "default": "Which VPC should this be deployed to?"
+          }
+        }
+      }
+    },
     "Parameters": {
         "KeyPair": {
-            "Type": "String",
-            "Description": "Key pair name.",
-            "Default": "build"
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Description": "Key pair name",
+            "Default": "general"
         },
         "VpcStackId": {
             "Description": "Id of desired VPC",
             "Type": "AWS::EC2::VPC::Id",
-            "Default": "vpc-XXXXXXXX"
+            "Default": "vpc-13767f7b"
         },
         "AvailabilityZone": {
             "Description": "AvailabilityZone of Stack",
-            "Type": "String",
+            "Type": "AWS::EC2::AvailabilityZone::Name",
             "Default": "eu-central-1c"
         },
 
         "SubnetId": {
-            "Description": "Id of desired subnet",
+            "Description": "Id of the subnet",
             "Type": "AWS::EC2::Subnet::Id",
-            "Default": "subnet-XXXXXXXX"
+            "Default": "subnet-c4e62d89"
         },
         "Domain": {
             "Type": "String",
@@ -30,18 +53,20 @@
         },
         "VolumeSize": {
             "Type": "String",
-            "Description": "Cue Data Volume size",
+            "Description": "MyTestProject Data Volume size  mounted on /opt in Gb",
             "Default": "100"
         },
         "VolumeType": {
             "Type": "String",
-            "Description": "cue Data Volume type",
+            "Description": "MyTestProject /opt Data Volume type. Can be gp2 for General Purpose SSD, io1 for Provisioned IOPS SSD, st1 for Throughput Optimized HDD, sc1 for Cold HDD, or standard for Magnetic volumes.",
+            "AllowedValues": ["gp2", "st1", "sc1", "standard"],
             "Default": "gp2"
         },
         "InstanceType": {
             "Type": "String",
-            "Description": "Try to avoid new instance types, as they use HVM hypervisor",
-            "Default": "t2.medium"
+            "Description": "Choose Instance type",
+            "AllowedValues": ["t2.nano", "t2.micro", "t2.small", "t2.medium", "t2.large", "r5.large", "m4.large", "m5.large", "c5.large", "t3.medium"],
+            "Default": "t2.small"
         }
     },
     "Mappings": {
@@ -92,7 +117,7 @@
         "SecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupDescription": "cue_sg",
+                "GroupDescription": "MyTestProject_sg",
                 "VpcId": {
                     "Fn::Sub": "${VpcStackId}"
                 },
@@ -134,7 +159,7 @@
                             "-", [{
                                     "Ref": "AWS::StackName"
                                 },
-                                "cue"
+                                "MyTestProject"
                             ]
                         ]
                     }
@@ -189,7 +214,7 @@
                     "Fn::Sub": "${AvailabilityZone}"
                 },
                 "IamInstanceProfile": {
-                    "Ref": "CueInstanceProfile"
+                    "Ref": "MyTestProjectInstanceProfile"
                 },
                 "KeyName": {
                     "Ref": "KeyPair"
@@ -215,15 +240,19 @@
                             "", [
                                 "#!/bin/bash -xe\n",
                                 "exec > >(tee /var/log/user-data.log|logger -t user-data ) 2>&1\n",
-                                "if ! blkid /dev/xvdk; then mkfs -t ext4 /dev/xvdk; fi\n",
-                                "mount /dev/xvdk /opt\n",
-                                "echo \"/dev/xvdk /opt ext4 defaults,nofail 0 2\" >> /etc/fstab\n",
+                                "echo 'Adding new dev/xvdk volume, creating fs, editing fstab'\n",
+                                "if ! blkid /dev/xvdk; then mkfs -t ext4 /dev/xvdk && echo \"/dev/xvdk /opt ext4 defaults,nofail 0 2\" >> /etc/fstab; fi\n",
+                                "echo 'If instance type is new and the hypervisor is HVM, adding new dev/sdk volume, creating fs, editing fstab'\n",
+                                "if ! blkid /dev/sdk; then mkfs -t ext4 /dev/sdk && echo \"/dev/sdk /opt ext4 defaults,nofail 0 2\" >> /etc/fstab; fi\n",
+                                "sudo mount -a\n",
                                 "sudo yum update -y\n",
                                 "sudo yum install -y git\n",
-                                "sudo mkdir -p /opt/cue\n",
-                                "sudo chown ec2-user:ec2-user /opt/cue\n",
+                                "sudo mkdir -p /opt/MyTestProject\n",
+                                "sudo chown ec2-user:ec2-user /opt/MyTestProject\n",
+                                "##git clone https://github.com/aliaskov/docker-elk.git /opt/MyTestProject/\n",
                                 "sudo curl -L https://github.com/docker/compose/releases/download/1.22.0/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\n",
                                 "sudo chmod +x /usr/local/bin/docker-compose\n",
+                                "echo 'Installing docker-compose - done'\n",
                                 "echo 'Downloading PIP and installing awscli'\n",
                                 "runuser -l ec2-user -c 'curl -O https://bootstrap.pypa.io/get-pip.py'\n",
                                 "echo 'Executing PIP using Python'\n",
@@ -246,7 +275,7 @@
                 }]
             }
         },
-        "CueRole": {
+        "MyTestProjectRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "AssumeRolePolicyDocument": {
@@ -266,10 +295,10 @@
                 "Path": "/"
             }
         },
-        "CueRolePolicy": {
+        "MyTestProjectRolePolicy": {
             "Type": "AWS::IAM::Policy",
             "Properties": {
-                "PolicyName": "CueRolePolicy",
+                "PolicyName": "MyTestProjectRolePolicy",
                 "PolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [{
@@ -290,19 +319,26 @@
                                 "ecr:BatchGetImage"
                             ],
                             "Resource": "*"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:*"
+                            ],
+                            "Resource": "*"
                         }
                     ]
                 },
                 "Roles": [{
-                    "Ref": "CueRole"
+                    "Ref": "MyTestProjectRole"
                 }]
             }
         },
-        "CueInstanceProfile": {
+        "MyTestProjectInstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "Roles": [{
-                    "Ref": "CueRole"
+                    "Ref": "MyTestProjectRole"
                 }]
             }
         }
