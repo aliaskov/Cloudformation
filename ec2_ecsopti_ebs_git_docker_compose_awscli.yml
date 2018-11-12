@@ -74,7 +74,7 @@
         "InstanceType": {
             "Type": "String",
             "Description": "Choose Instance type",
-            "AllowedValues": ["t2.nano", "t2.micro", "t2.small", "t2.medium", "t2.large", "r5.large", "m4.large", "m5.large", "c5.large", "t3.medium"],
+            "AllowedValues": ["t2.nano", "t3.nano", "t2.micro", "t3.micro", "t2.small", "t3.small", "t2.medium", "t3.medium", "t2.large", "t3.large", "r5.large", "m4.large", "m5.large", "c5.large"],
             "Default": "t2.small"
         }
     },
@@ -257,8 +257,10 @@
                                 "sudo yum update -y\n",
                                 "sudo yum install -y git\n",
                                 "sudo mkdir -p /opt/MyTestProject\n",
+                                "sudo mkdir -p /opt/certbot\n",
                                 "sudo chown ec2-user:ec2-user /opt/MyTestProject\n",
-                                "##git clone https://github.com/aliaskov/docker-elk.git /opt/MyTestProject/\n",
+                                "sudo chown ec2-user:ec2-user /opt/certbot\n",
+                                "git clone https://github.com/certbot/certbot.git /opt/certbot\n",
                                 "sudo curl -L https://github.com/docker/compose/releases/download/1.22.0/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\n",
                                 "sudo chmod +x /usr/local/bin/docker-compose\n",
                                 "echo 'Installing docker-compose - done'\n",
