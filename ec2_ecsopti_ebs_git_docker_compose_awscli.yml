@@ -8,7 +8,7 @@
             "Label": {
               "default": "Network Configuration"
             },
-            "Parameters": ["VpcStackId", "SubnetId", "AvailabilityZone", "SSHLocation"]
+            "Parameters": ["VpcStackId", "SubnetId", "AvailabilityZone", "SSHLocation", "HTTPSLocation", "AppPort", "AppPortLocation"]
           },
           {
             "Label": {
@@ -48,7 +48,7 @@
         },
         "Domain": {
             "Type": "String",
-            "Description": "Domain that serves as HostedZone for Route53.",
+            "Description": "Route53 Domain that serves as HostedZone for Route53.",
             "Default": "aws.funkedigital.de"
         },
         "VolumeSize": {
@@ -63,37 +63,62 @@
             "Default": "gp2"
         },
         "SSHLocation": {
-          "Description": "The IP address range that can be used to SSH to the EC2 instances"
-          "Type": "String"
+          "Description": "The IP address range that can be used to SSH to the EC2 instances",
+          "Type": "String",
           "MinLength": "9",
           "MaxLength": "18",
-          "Default": "0.0.0.0/0"
+          "Default": "0.0.0.0/0",
           "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
           "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+        },
+        "HTTPSLocation": {
+          "Description": "The IP address range that can be used to use http AND https to the EC2 instances",
+          "Type": "String",
+          "MinLength": "9",
+          "MaxLength": "18",
+          "Default": "0.0.0.0/0",
+          "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+          "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+        },
+        "AppPortLocation": {
+          "Description": "The IP address range that can be used to use The Application port",
+          "Type": "String",
+          "MinLength": "9",
+          "MaxLength": "18",
+          "Default": "10.0.0.0/8",
+          "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+          "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+        },
+        "AppPort": {
+          "Description": "The Application port that can be opened for a range of IPs - AppPortLocation",
+          "Default": "8080",
+          "Type": "Number",
+          "MinValue": "1",
+          "MaxValue": "65535"
         },
         "InstanceType": {
             "Type": "String",
             "Description": "Choose Instance type",
             "AllowedValues": ["t2.nano", "t3.nano", "t2.micro", "t3.micro", "t2.small", "t3.small", "t2.medium", "t3.medium", "t2.large", "t3.large", "r5.large", "m4.large", "m5.large", "c5.large"],
-            "Default": "t2.small"
+            "Default": "t3.small"
         }
     },
     "Mappings": {
         "AmazonLinuxAmi": {
             "us-east-1": {
-                "Ami": "ami-0a0c6574ce16ce87a"
+                "Ami": "ami-07eb698ce660402d2"
             },
             "us-east-2": {
-                "Ami": "ami-58f5db3d"
+                "Ami": "ami-0a0c6574ce16ce87a"
             },
             "us-west-1": {
-                "Ami": "ami-62e0d802"
+                "Ami": "ami-04c22ba97a0c063c4"
             },
             "us-west-2": {
-                "Ami": "ami-7114c909"
+                "Ami": "ami-09568291a9d6c804c"
             },
             "eu-west-2": {
-                "Ami": "ami-dbfee1bf"
+                "Ami": "ami-0cb31bf24b130a0f9"
             },
             "eu-central-1": {
                 "Ami": "ami-0b9fee3a2d0596ed1"
@@ -115,12 +140,7 @@
                 },
                 "Type": "A",
                 "TTL": "60",
-                "ResourceRecords": [{
-                    "Fn::GetAtt": [
-                        "Instance",
-                        "PublicIp"
-                    ]
-                }]
+                "ResourceRecords": [{"Ref": "EIPAddress"}]
             }
         },
         "SecurityGroup": {
@@ -132,11 +152,6 @@
                 },
                 "SecurityGroupIngress": [{
                     "IpProtocol": "tcp",
-                    "FromPort": 9090,
-                    "ToPort": 9090,
-                    "CidrIp": "10.0.0.0/8"
-                }, {
-                    "IpProtocol": "tcp",
                     "FromPort": "22",
                     "ToPort": "22",
                     "CidrIp": { "Ref" : "SSHLocation"}
@@ -144,22 +159,17 @@
                     "IpProtocol": "tcp",
                     "FromPort": 80,
                     "ToPort": 80,
-                    "CidrIp": "10.0.0.0/8"
+                    "CidrIp": { "Ref" : "HTTPSLocation"}
                 }, {
                     "IpProtocol": "tcp",
-                    "FromPort": 9093,
-                    "ToPort": 9093,
-                    "CidrIp": "10.0.0.0/8"
-                }, {
-                    "IpProtocol": "tcp",
-                    "FromPort": 3000,
-                    "ToPort": 3000,
-                    "CidrIp": "10.0.0.0/8"
+                    "FromPort": { "Ref" : "AppPort"},
+                    "ToPort": { "Ref" : "AppPort"},
+                    "CidrIp": { "Ref" : "AppPortLocation"}
                 }, {
                     "IpProtocol": "tcp",
                     "FromPort": 443,
                     "ToPort": 443,
-                    "CidrIp": "10.0.0.0/8"
+                    "CidrIp": { "Ref" : "HTTPSLocation"}
                 }],
                 "Tags": [{
                     "Key": "name",
@@ -284,6 +294,16 @@
                         "Fn::Sub": "${AWS::StackName}"
                     }
                 }]
+            }
+        },
+        "EIPAddress": {
+            "Type": "AWS::EC2::EIP"
+        },
+        "EIPAssoc": {
+            "Type": "AWS::EC2::EIPAssociation",
+            "Properties": {
+                "InstanceId": {"Ref": "Instance"},
+                "EIP": {"Ref": "EIPAddress"}
             }
         },
         "MyTestProjectRole": {
