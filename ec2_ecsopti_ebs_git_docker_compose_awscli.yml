@@ -280,7 +280,21 @@
                                 "runuser -l ec2-user -c 'python get-pip.py --user'\n",
                                 "runuser -l ec2-user -c 'pip install awscli --upgrade --user'\n",
                                 "runuser -l ec2-user -c 'export PATH=/home/ec2-user/.local/bin:$PATH'\n",
-                                "echo 'Installing AWS CLI - done'\n"
+                                "echo 'Installing AWS CLI - done'\n",
+                                "echo 'Installing s3fs-fuse'\n",
+                                "sudo mkdir -p /opt/s3fs-fuse\n",
+                                "sudo chown ec2-user:ec2-user /opt/s3fs-fuse\n",
+                                "git clone https://github.com/s3fs-fuse/s3fs-fuse /opt/s3fs-fuse\n",
+                                "cd /opt/s3fs-fuse\n",
+                                "/opt/s3fs-fuse/autogen.sh\n",
+                                "/opt/s3fs-fuse/configure --prefix=/usr --with-openssl\n",
+                                "make\n",
+                                "sudo make install\n",
+                                "echo 'Installing s3fs-fuse  - done'\n",
+                                "echo 'mounting s3fs-fuse'\n",
+                                "echo 's3fs#", { "Ref": "AWS::StackName" }, "-s3bucket /opt/s3 fuse _netdev,allow_other,iam_role=", { "Ref" : "MyTestProjectRole" }, ",use_cache=/tmp/s3fs/cache  0 0\n' >> /etc/fstab\n",
+                                "sudo mkdir -p /opt/s3\n",
+                                "sudo mount -a\n"
                             ]
                         ]
                     }
