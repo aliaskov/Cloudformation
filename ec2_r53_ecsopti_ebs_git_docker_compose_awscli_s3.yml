@@ -53,12 +53,12 @@
         },
         "VolumeSize": {
             "Type": "String",
-            "Description": "UnhappyDummy Data Volume size  mounted on /opt in Gb",
+            "Description": "MyTestProject Data Volume size  mounted on /opt in Gb",
             "Default": "100"
         },
         "VolumeType": {
             "Type": "String",
-            "Description": "UnhappyDummy /opt Data Volume type. Can be gp2 for General Purpose SSD, io1 for Provisioned IOPS SSD, st1 for Throughput Optimized HDD, sc1 for Cold HDD, or standard for Magnetic volumes.",
+            "Description": "MyTestProject /opt Data Volume type. Can be gp2 for General Purpose SSD, io1 for Provisioned IOPS SSD, st1 for Throughput Optimized HDD, sc1 for Cold HDD, or standard for Magnetic volumes.",
             "AllowedValues": ["gp2", "st1", "sc1", "standard"],
             "Default": "gp2"
         },
@@ -154,7 +154,7 @@
         "SecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupDescription": "UnhappyDummy_sg",
+                "GroupDescription": "MyTestProject_sg",
                 "VpcId": {
                     "Fn::Sub": "${VpcStackId}"
                 },
@@ -186,7 +186,7 @@
                             "-", [{
                                     "Ref": "AWS::StackName"
                                 },
-                                "UnhappyDummy"
+                                "MyTestProject"
                             ]
                         ]
                     }
@@ -241,7 +241,7 @@
                     "Fn::Sub": "${AvailabilityZone}"
                 },
                 "IamInstanceProfile": {
-                    "Ref": "UnhappyDummyInstanceProfile"
+                    "Ref": "MyTestProjectInstanceProfile"
                 },
                 "KeyName": {
                     "Ref": "KeyPair"
@@ -273,9 +273,7 @@
                                 "if ! blkid /dev/sdk; then mkfs -t ext4 /dev/sdk && echo \"/dev/sdk /opt ext4 defaults,nofail 0 2\" >> /etc/fstab; fi\n",
                                 "sudo mount -a\n",
                                 "sudo yum update -y\n",
-                                "sudo yum install -y epel-release\n",
-                                "sudo sed -i 's/enabled=0/enabled=1/' /etc/yum.repos.d/epel.repo\n",
-                                "sudo yum install -y git gcc libstdc++-devel gcc-c++ fuse fuse-devel curl-devel libxml2-devel mailcap automake openssl-devel git\n",
+                                "sudo yum install -y git\n",
                                 "sudo mkdir -p /opt/", { "Ref": "AWS::StackName" }, "\n",
                                 "sudo mkdir -p /opt/certbot\n",
                                 "sudo chown ec2-user:ec2-user /opt/", { "Ref": "AWS::StackName" }, "\n",
@@ -290,21 +288,7 @@
                                 "runuser -l ec2-user -c 'python get-pip.py --user'\n",
                                 "runuser -l ec2-user -c 'pip install awscli --upgrade --user'\n",
                                 "runuser -l ec2-user -c 'export PATH=/home/ec2-user/.local/bin:$PATH'\n",
-                                "echo 'Installing AWS CLI - done'\n",
-                                "echo 'Installing s3fs-fuse'\n",
-                                "sudo mkdir -p /opt/s3fs-fuse\n",
-                                "sudo chown ec2-user:ec2-user /opt/s3fs-fuse\n",
-                                "git clone https://github.com/s3fs-fuse/s3fs-fuse /opt/s3fs-fuse\n",
-                                "cd /opt/s3fs-fuse\n",
-                                "/opt/s3fs-fuse/autogen.sh\n",
-                                "/opt/s3fs-fuse/configure --prefix=/usr --with-openssl\n",
-                                "make\n",
-                                "sudo make install\n",
-                                "echo 'Installing s3fs-fuse  - done'\n",
-                                "echo 'mounting s3fs-fuse'\n",
-                                "echo 's3fs#", { "Ref": "S3Bucket" }, " /opt/", { "Ref": "AWS::StackName" }, " fuse _netdev,allow_other,iam_role=", { "Ref" : "UnhappyDummyRole" }, ",use_cache=/tmp/s3fs/cache  0 0\n' >> /etc/fstab\n",
-                                "sudo mkdir -p /opt/s3\n",
-                                "sudo mount -a\n"
+                                "echo 'Installing AWS CLI - done'\n"
                             ]
                         ]
                     }
@@ -330,7 +314,7 @@
                 "EIP": {"Ref": "EIPAddress"}
             }
         },
-        "UnhappyDummyRole": {
+        "MyTestProjectRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "AssumeRolePolicyDocument": {
@@ -350,10 +334,10 @@
                 "Path": "/"
             }
         },
-        "UnhappyDummyRolePolicy": {
+        "MyTestProjectRolePolicy": {
             "Type": "AWS::IAM::Policy",
             "Properties": {
-                "PolicyName": "UnhappyDummyRolePolicy",
+                "PolicyName": "MyTestProjectRolePolicy",
                 "PolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [{
@@ -396,15 +380,15 @@
                     ]
                 },
                 "Roles": [{
-                    "Ref": "UnhappyDummyRole"
+                    "Ref": "MyTestProjectRole"
                 }]
             }
         },
-        "UnhappyDummyInstanceProfile": {
+        "MyTestProjectInstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "Roles": [{
-                    "Ref": "UnhappyDummyRole"
+                    "Ref": "MyTestProjectRole"
                 }]
             }
         }

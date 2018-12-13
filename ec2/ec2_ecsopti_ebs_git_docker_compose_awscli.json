@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "CloudFormation template of Ec2 ecs optimized Amazon Linux  with git, aws cli and docker-compose",
+    "Description": "CloudFormation template of Ec2 ecs optimized Amazon Linux  with git, aws cli and docker-compose and s3-fs",
     "Metadata": {
       "AWS::CloudFormation::Interface": {
         "ParameterGroups": [
@@ -48,7 +48,7 @@
         },
         "Domain": {
             "Type": "String",
-            "Description": "Route53 Domain that serves as HostedZone for Route53.",
+            "Description": "Route53 Domain that serves as HostedZone for Route53. Provide a valid domain name using only lowercase letters",
             "Default": "aws.funkedigital.de"
         },
         "VolumeSize": {
@@ -268,6 +268,8 @@
                                 "#!/bin/bash -xe\n",
                                 "exec > >(tee /var/log/user-data.log|logger -t user-data ) 2>&1\n",
                                 "echo 'Adding new dev/xvdk volume, creating fs, editing fstab'\n",
+                                "userName=`whoami`\n",
+                                "echo $userName\n",
                                 "if ! blkid /dev/xvdk; then mkfs -t ext4 /dev/xvdk && echo \"/dev/xvdk /opt ext4 defaults,nofail 0 2\" >> /etc/fstab; fi\n",
                                 "echo 'If instance type is new and the hypervisor is HVM, adding new dev/sdk volume, creating fs, editing fstab'\n",
                                 "if ! blkid /dev/sdk; then mkfs -t ext4 /dev/sdk && echo \"/dev/sdk /opt ext4 defaults,nofail 0 2\" >> /etc/fstab; fi\n",
@@ -275,7 +277,7 @@
                                 "sudo yum update -y\n",
                                 "sudo yum install -y epel-release\n",
                                 "sudo sed -i 's/enabled=0/enabled=1/' /etc/yum.repos.d/epel.repo\n",
-                                "sudo yum install -y git gcc libstdc++-devel gcc-c++ fuse fuse-devel curl-devel libxml2-devel mailcap automake openssl-devel git\n",
+                                "sudo yum install -y git gcc libstdc++-devel gcc-c++ fuse fuse-devel curl-devel libxml2-devel mailcap automake openssl-devel\n",
                                 "sudo mkdir -p /opt/", { "Ref": "AWS::StackName" }, "\n",
                                 "sudo mkdir -p /opt/certbot\n",
                                 "sudo chown ec2-user:ec2-user /opt/", { "Ref": "AWS::StackName" }, "\n",
@@ -292,6 +294,7 @@
                                 "runuser -l ec2-user -c 'export PATH=/home/ec2-user/.local/bin:$PATH'\n",
                                 "echo 'Installing AWS CLI - done'\n",
                                 "echo 'Installing s3fs-fuse'\n",
+                                "sudo mkdir -p /opt/s3\n",
                                 "sudo mkdir -p /opt/s3fs-fuse\n",
                                 "sudo chown ec2-user:ec2-user /opt/s3fs-fuse\n",
                                 "git clone https://github.com/s3fs-fuse/s3fs-fuse /opt/s3fs-fuse\n",
@@ -302,8 +305,7 @@
                                 "sudo make install\n",
                                 "echo 'Installing s3fs-fuse  - done'\n",
                                 "echo 'mounting s3fs-fuse'\n",
-                                "echo 's3fs#", { "Ref": "S3Bucket" }, " /opt/", { "Ref": "AWS::StackName" }, " fuse _netdev,allow_other,iam_role=", { "Ref" : "UnhappyDummyRole" }, ",use_cache=/tmp/s3fs/cache  0 0\n' >> /etc/fstab\n",
-                                "sudo mkdir -p /opt/s3\n",
+                                "echo 's3fs#", { "Ref": "S3Bucket" }, " /opt/s3 fuse _netdev,allow_other,uid='`id -u ec2-user`',iam_role=", { "Ref" : "UnhappyDummyRole" }, ",use_cache=/tmp/s3fs/cache,url=https://s3-", { "Ref": "AWS::Region" }, ".amazonaws.com/  0 0' >> /etc/fstab\n",
                                 "sudo mount -a\n"
                             ]
                         ]
@@ -347,7 +349,10 @@
                         ]
                     }]
                 },
-                "Path": "/"
+                "Path": "/",
+                "RoleName": {
+                    "Fn::Sub": "${AWS::Region}-${AWS::StackName}-Role"
+                }
             }
         },
         "UnhappyDummyRolePolicy": {
@@ -392,6 +397,24 @@
                                   ]
                               ]
                             }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:*"
+                            ],
+                            "Resource": {
+                              "Fn::Join": [
+                                  "",
+                                  [
+                                      "arn:aws:s3:::",
+                                      {
+                                          "Ref": "S3Bucket"
+                                      },
+                                      ""
+                                  ]
+                              ]
+                            }
                         }
                     ]
                 },
@@ -405,7 +428,10 @@
             "Properties": {
                 "Roles": [{
                     "Ref": "UnhappyDummyRole"
-                }]
+                }],
+                "InstanceProfileName": {
+                    "Fn::Sub": "${AWS::StackName}-InstanceProfile"
+                }
             }
         }
     }
