@@ -11,6 +11,7 @@ Metadata:
           - VPC
           - PublicSubnetOne
           - PublicSubnetTwo
+          - SecurityGroupELBId
       -
         Label:
           default: "Amazon ECS Fargate Configuration"
@@ -70,7 +71,7 @@ Parameters:
     Default: 8080
     MinValue : 20
     MaxValue : 65535
-    Description: Application port, inside container
+    Description: Application port, inside container, would be open for VPC private IP
   HealthcheckPort:
     Type: Number
     Default: 80
@@ -88,7 +89,7 @@ Parameters:
     MaxLength: 64
     AllowedPattern: (?!-)[a-zA-Z0-9-.]*(?<!-)
     ConstraintDescription: must be a valid fully-qualified domain name. StackName would be added automatically
-    Default: aws.funkedigital.de
+    Default: aws.mydomain.com
 
   VPC:
     Description: VPC ID for resources
@@ -99,6 +100,10 @@ Parameters:
   PublicSubnetTwo:
     Description: Select public subnet within VPC
     Type: AWS::EC2::Subnet::Id
+  SecurityGroupELBId:
+    Description: Security group that can be used to access the Load balancer from Internet
+    Type: AWS::EC2::SecurityGroup::Id
+    ConstraintDescription: must be a valid Security group ID
 
   Env1:
     Description: Environment variable with name 'Env1' and value 'Val1' is injected into the task
@@ -210,11 +215,13 @@ Resources:
   PublicLoadBalancerSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Access to the public facing load balancer
+      GroupDescription: Access to the public facing load balancer, ContainerApp port is open for VPC Private IP range
       VpcId: !Ref 'VPC'
       SecurityGroupIngress:
-          - CidrIp: 0.0.0.0/0
-            IpProtocol: -1
+        - IpProtocol: tcp
+          FromPort: !Ref 'ContainerPort'
+          ToPort: !Ref 'ContainerPort'
+          CidrIp:  10.0.0.0/8
 
   PublicLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -229,7 +236,7 @@ Resources:
       SecurityGroups:
         - !Ref 'FargateContainerSecurityGroup'
         - !Ref 'PublicLoadBalancerSG'
-
+        - !Ref 'SecurityGroupELBId'
 
   FargateTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
