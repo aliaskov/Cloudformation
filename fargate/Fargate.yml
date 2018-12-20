@@ -1,0 +1,503 @@
+# Template adapted from https://github.com/nathanpeck/aws-cloudformation-fargate
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template that creates AWS Fargate stack- Cluster, Service, TaskDefinition and delpoys Docker container. ALB with Route53 DNS name included
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "Network Configuration"
+        Parameters:
+          - VPC
+          - PublicSubnetOne
+          - PublicSubnetTwo
+          - SecurityGroupELBId
+      -
+        Label:
+          default: "Amazon ECS Fargate Configuration"
+        Parameters:
+          - Cpu
+          - Memory
+          - DockerImage
+          - ImageTag
+      -
+        Label:
+          default: "Fargate Container Configuration"
+        Parameters:
+          - ContainerPort
+      -
+        Label:
+          default: "Amazon Application Load balancer and Domain Configuration"
+        Parameters:
+          - DomainName
+          - HealthcheckPath
+          - HealthcheckPort
+      -
+        Label:
+          default: "Container Variables Configuration"
+        Parameters:
+          - Env1
+          - Val1
+          - Env2
+          - Val2
+          - Env3
+          - Val3
+          - Env4
+          - Val4
+          - Env5
+          - Val5
+    ParameterLabels:
+      VPC:
+        default: "Which VPC should this be deployed to?"
+      Cpu:
+        default: "The CPU units for the container"
+      Memory:
+        default: "The MEMORY reservation for the container"
+Parameters:
+  DockerImage:
+    Type: String
+    Default: nginx
+    Description: Docker image name
+  ImageTag:
+    Type: String
+    Default: latest
+    Description: Docker image tag
+    # AllowedValues:
+    #   - latest
+    #   - prod
+    #   - uat
+  ContainerPort:
+    Type: Number
+    Default: 8080
+    MinValue : 20
+    MaxValue : 65535
+    Description: Application port, inside container, would be open for VPC private IP
+  HealthcheckPort:
+    Type: Number
+    Default: 80
+    MinValue : 80
+    MaxValue : 65535
+    Description: Healthcheck port to be part of the TargetGroup. Should be accessible from load balancer,
+  HealthcheckPath:
+    Type: String
+    Default: "/"
+    Description: Healthcheck path. Should be accessible from load balancer, to be part of the TG
+  DomainName:
+    Type: String
+    Description: A fully-qualified domain name. Used to be an alias for ALB
+    MinLength: 1
+    MaxLength: 64
+    AllowedPattern: (?!-)[a-zA-Z0-9-.]*(?<!-)
+    ConstraintDescription: must be a valid fully-qualified domain name. StackName would be added automatically
+    Default: aws.funkedigital.de
+
+  VPC:
+    Description: VPC ID for resources
+    Type: AWS::EC2::VPC::Id
+  PublicSubnetOne:
+    Description: Select public subnet within VPC
+    Type: AWS::EC2::Subnet::Id
+  PublicSubnetTwo:
+    Description: Select public subnet within VPC
+    Type: AWS::EC2::Subnet::Id
+  SecurityGroupELBId:
+    Description: Security group that can be used to access the Load balancer from Internet
+    Type: AWS::EC2::SecurityGroup::Id
+    ConstraintDescription: must be a valid Security group ID
+
+  Env1:
+    Description: Environment variable with name 'Env1' and value 'Val1' is injected into the task
+    Type: String
+    Default: SPRING_PROFILES_ACTIVE
+  Val1:
+    Description: Value of the environment variable 1 - Env1
+    Type: String
+    Default: 'aws'
+  Env2:
+    Description: Environment variable with name 'Env2' and value 'Val2' is injected into the task
+    Type: String
+    Default: Env2
+  Val2:
+    Description: Value of the environment variable 2 - Env2
+    Type: String
+    Default: ''
+  Env3:
+    Description: Environment variable with name 'Env3' and value 'Val3' is injected into the task
+    Type: String
+    Default: Env3
+  Val3:
+    Description: Value of the environment variable 3 - Env3
+    Type: String
+    Default: ''
+  Env4:
+    Description: Environment variable with name 'Env4' and value 'Val4' is injected into the task
+    Type: String
+    Default: Env4
+  Val4:
+    Description: Value of the environment variable 4 - Env4
+    Type: String
+    Default: ''
+  Env5:
+    Description: Environment variable with name 'Env5' and value 'Val5' is injected into the task
+    Type: String
+    Default: Env5
+  Val5:
+    Description: Value of the environment variable 5 - Env5
+    Type: String
+    Default: ''
+    # DbHost:
+    #   Type: String
+    #
+    # DbPort:
+    #   Type: Number
+    #   Default: 3306
+    #
+    # DbUser:
+    #   Type: String
+    #
+    # DbPassword:
+    #   Type: String
+    #   NoEcho: true
+    #
+    # DbConnector:
+    #   Type: String
+    #   Default: mysql
+  # Important: Follow the CPU + memory combination rules laid out here:
+  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-taskdefinition.html
+  Cpu:
+    Type: String
+    Description: Supported values are between **256 CPU units or 0.25 vCPUs** and **10240 CPU units or 10 vCPUs**. Must adhere to https://https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html
+    Default: 256
+
+  Memory:
+    Description:  0.5GB, 1GB, 2GB - Available cpu values 256 = .25 vCPU. | 1GB, 2GB, 3GB, 4GB - Available cpu values 512 =.5 vCPU.  | 2GB, 3GB, 4GB, 5GB, 6GB, 7GB, 8GB - Available cpu values 1024 =1 vCPU.  | Between 4GB and 16GB in 1GB increments - Available cpu values 2048 = 2 vCPU.  | Between 8GB and 30GB in 1GB increments - Available cpu values 4096 = 4 vCPU
+    Type: String
+    Default: 0.5GB
+  #
+  # JvmOpts:
+  #   Description: The JVM options passed to Fargate . For example, change this value when changing the memory parameter. Max heap memory (Xmx) should be roughly two thirds of the total memory.
+  #   Type: String
+  #   Default: '-Xmx1350m'
+
+  # ManagementApiSecret:
+  #   Description: The secret for your App.
+  #   Type: String
+
+
+
+Resources:
+  # ECS Resources
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+
+  FargateContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to the Fargate containers
+      VpcId: !Ref 'VPC'
+
+  EcsSecurityGroupIngressFromPublicALB:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from the public ALB
+      GroupId: !Ref 'FargateContainerSecurityGroup'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref 'PublicLoadBalancerSG'
+
+  EcsSecurityGroupIngressFromSelf:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from other containers in the same security group
+      GroupId: !Ref 'FargateContainerSecurityGroup'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref 'FargateContainerSecurityGroup'
+
+  PublicLoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to the public facing load balancer, ContainerApp port is open for VPC Private IP range
+      VpcId: !Ref 'VPC'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref 'ContainerPort'
+          ToPort: !Ref 'ContainerPort'
+          CidrIp:  10.0.0.0/8
+
+  PublicLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+      - Key: idle_timeout.timeout_seconds
+        Value: '30'
+      Subnets:
+        - !Ref PublicSubnetOne
+        - !Ref PublicSubnetTwo
+      SecurityGroups:
+        - !Ref 'FargateContainerSecurityGroup'
+        - !Ref 'PublicLoadBalancerSG'
+        - !Ref 'SecurityGroupELBId'
+
+  FargateTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: !Ref 'HealthcheckPath'
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 20
+      HealthyThresholdCount: 3
+      Name: !Join ['-', [!Ref 'AWS::StackName', 'fargate']]
+      Port: !Ref 'HealthcheckPort'
+      Protocol: HTTP
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref 'VPC'
+      TargetType: 'ip'
+
+  PublicLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn:
+      - PublicLoadBalancer
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref 'FargateTargetGroup'
+          Type: 'forward'
+      LoadBalancerArn: !Ref 'PublicLoadBalancer'
+      Port: 80
+      Protocol: HTTP
+
+  FargateLogs:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Ref 'AWS::StackName'
+      RetentionInDays: 3
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Cpu: !Ref Cpu
+      Memory: !Ref Memory
+      RequiresCompatibilities:
+        - FARGATE
+      Family: !Join ['-', [!Ref 'AWS::StackName', 'fargate']]
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole # arn:aws:iam::000:role/EcsTaskExecutionRole
+      TaskRoleArn: !Ref ECSTaskExecutionRole #arn:aws:iam::000:role/EcsTaskExecutionRole
+      ContainerDefinitions:
+        - Name: !Join ['-', [!Ref 'AWS::StackName', 'fargate']]
+          Essential: true
+          Image: !Join [ ':', [!Ref DockerImage, !Ref ImageTag ] ]
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+          Environment:
+          - Name:
+              Ref: Env1
+            Value:
+              Ref: Val1
+          - Name:
+              Ref: Env2
+            Value:
+              Ref: Val2
+          - Name:
+              Ref: Env3
+            Value:
+              Ref: Val3
+          - Name:
+              Ref: Env4
+            Value:
+              Ref: Val4
+          - Name:
+              Ref: Env5
+            Value:
+              Ref: Val5
+          # Environment:
+            # - Name: APP_CONFIG
+            #   Value: !Sub
+            #     - |
+            #       port: 60000
+            #       managementApiSecret: ${ManagementApiSecret}
+            #       databases:
+            #         default:
+            #           connector: ${DbConnector}
+            #           host: ${DbHost}
+            #           port: ${DbPort}
+            #           user: ${DbUser}
+            #           password: ${DbPassword}
+            #           migrations: true
+            #     - {}
+            # - Name: JAVA_OPTS
+            #   Value: !Ref JvmOpts
+          #
+          # Ulimits:
+          #   - Name: nofile
+          #     HardLimit: 1000000
+          #     SoftLimit: 1000000
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref 'AWS::StackName'
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: !Ref 'AWS::StackName'
+
+  FargateService:
+    Type: AWS::ECS::Service
+    DependsOn: PublicLoadBalancerListener
+    Properties:
+      Cluster: !Ref ECSCluster
+      ServiceName: !Ref 'AWS::StackName'
+      LaunchType: FARGATE
+      DesiredCount: 1
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      TaskDefinition: !Ref TaskDefinition
+      LoadBalancers:
+        - ContainerName: !Join ['-', [!Ref 'AWS::StackName', 'fargate']]
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref FargateTargetGroup
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref PublicLoadBalancerSG
+          Subnets:
+            - !Ref PublicSubnetOne
+            - !Ref PublicSubnetTwo
+  ALBDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Comment: DNS name for FG task.
+      HostedZoneName: !Join ['', [!Ref 'DomainName', .]]
+      Name: !Join ['', [!Ref 'AWS::StackName', ., !Ref 'DomainName', .]]
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt PublicLoadBalancer.DNSName
+        HostedZoneId: !GetAtt PublicLoadBalancer.CanonicalHostedZoneID
+
+  # This is an IAM role which authorizes ECS to manage resources on your
+  # account on your behalf, such as updating your load balancer with the
+  # details of where your containers are, so that traffic can reach your
+  # containers.
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: ecs-service
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              # Rules which allow ECS to attach network interfaces to instances
+              # on your behalf in order for awsvpc networking mode to work right
+              - 'ec2:AttachNetworkInterface'
+              - 'ec2:CreateNetworkInterface'
+              - 'ec2:CreateNetworkInterfacePermission'
+              - 'ec2:DeleteNetworkInterface'
+              - 'ec2:DeleteNetworkInterfacePermission'
+              - 'ec2:Describe*'
+              - 'ec2:DetachNetworkInterface'
+
+              # Rules which allow ECS to update load balancers on your behalf
+              # with the information sabout how to send traffic to your containers
+              - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+              - 'elasticloadbalancing:DeregisterTargets'
+              - 'elasticloadbalancing:Describe*'
+              - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+              - 'elasticloadbalancing:RegisterTargets'
+            Resource: '*'
+
+  # This is a role which is used by the ECS tasks themselves.
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs-tasks.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskExecutionRolePolicy
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+                # Allow the ECS Tasks to download images from ECR
+                - 'ecr:GetAuthorizationToken'
+                - 'ecr:BatchCheckLayerAvailability'
+                - 'ecr:GetDownloadUrlForLayer'
+                - 'ecr:BatchGetImage'
+
+                # Allow the ECS tasks to upload logs to CloudWatch
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+              Resource: '*'
+
+# These are the values output by the CloudFormation template. Be careful
+# about changing any of them, because of them are exported with specific
+# names so that the other task related CF templates can use them.
+Outputs:
+  ClusterName:
+    Description: The name of the ECS cluster
+    Value: !Ref 'ECSCluster'
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ClusterName' ] ]
+
+  ExternalALBUrl:
+    Description: The url of the external load balancer
+    Value: !Join ['', ['http://', !GetAtt 'PublicLoadBalancer.DNSName']]
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ExternalALBUrl' ] ]
+  ExternalDNSName:
+    Description: The url of the DNS record in Route53
+    Value: !Join ['', ['http://', !Ref 'ALBDNSRecord' ] ]
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ExternalDNSName' ] ]
+  ECSRole:
+    Description: The ARN of the ECS role
+    Value: !GetAtt 'ECSRole.Arn'
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ECSRole' ] ]
+
+  ECSTaskExecutionRole:
+    Description: The ARN of the ECS role
+    Value: !GetAtt 'ECSTaskExecutionRole.Arn'
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ECSTaskExecutionRole' ] ]
+
+  PublicListener:
+    Description: The ARN of the public load balancer's Listener
+    Value: !Ref PublicLoadBalancerListener
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'PublicListener' ] ]
+
+  VPCId:
+    Description: The ID of the VPC that this stack is deployed in
+    Value: !Ref 'VPC'
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'VPCId' ] ]
+
+  PublicSubnetOne:
+    Description: Public subnet one
+    Value: !Ref 'PublicSubnetOne'
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'PublicSubnetOne' ] ]
+
+  PublicSubnetTwo:
+    Description: Public subnet two
+    Value: !Ref 'PublicSubnetTwo'
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'PublicSubnetTwo' ] ]
+
+  FargateContainerSecurityGroup:
+    Description: A security group used to allow Fargate containers to receive traffic
+    Value: !Ref 'FargateContainerSecurityGroup'
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'FargateContainerSecurityGroup' ] ]
