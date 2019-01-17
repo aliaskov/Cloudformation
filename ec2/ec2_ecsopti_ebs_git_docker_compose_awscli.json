@@ -305,7 +305,7 @@
                                 "sudo make install\n",
                                 "echo 'Installing s3fs-fuse  - done'\n",
                                 "echo 'mounting s3fs-fuse'\n",
-                                "echo 's3fs#", { "Ref": "S3Bucket" }, " /opt/s3 fuse _netdev,allow_other,uid='`id -u ec2-user`',iam_role=", { "Ref" : "UnhappyDummyRole" }, ",use_cache=/tmp/s3fs/cache,url=https://s3-", { "Ref": "AWS::Region" }, ".amazonaws.com/  0 0' >> /etc/fstab\n",
+                                "echo 's3fs#", { "Ref": "S3Bucket" }, " /opt/s3 fuse _netdev,allow_other,uid='`id -u ec2-user`',iam_role=", { "Ref" : "UnhappyDummyRole" }, ",use_cache=/tmp/s3fs/cache,url=https://s3-", { "Ref": "AWS::Region" }, ".amazonaws.com/,gid='`id -u ec2-user`',umask=022  0 0' >> /etc/fstab\n",
                                 "sudo mount -a\n"
                             ]
                         ]
